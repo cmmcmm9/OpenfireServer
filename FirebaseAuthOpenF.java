@@ -39,6 +39,7 @@ import com.google.firebase.auth.FirebaseToken;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.logging.Level;
 import org.dom4j.CharacterData;
 import static org.jivesoftware.openfire.muc.MUCRole.Log;
@@ -56,6 +57,52 @@ import org.jivesoftware.openfire.user.UserNotFoundException;
  */
 public class FirebaseAuthOpenF implements AuthProvider {
     
+    private static final String QUERY_USER = "SELECT username FROM ofUser where username=?";
+    String os = System.getProperty("os.name");
+    private String appName = "openfireAuth";
+    
+    public FirebaseAuthOpenF(){
+        try {
+            initFirebase();
+        } catch (InternalUnauthenticatedException ex) {
+            java.util.logging.Logger.getLogger(FirebaseAuthOpenF.class.getName()).log(Level.SEVERE, null, ex);
+        }
+    }
+    
+    //method to make sure that there is always exactly one instance of the Firebase app
+    private void initFirebase() throws InternalUnauthenticatedException{
+        
+        InputStream path = getClass().getResourceAsStream("/tapin-c0ba6-firebase-adminsdk-wcwb2-f27fea915a.json");
+        Boolean create = false;
+        
+        try{
+            FirebaseApp.getInstance(appName);
+            System.out.println("Firebase App Already Exists");
+        }
+        catch(Exception ex){
+            System.out.println("Firebase app doesn't exist, time to create it");
+            create = true;
+        }
+        if(FirebaseApp.getApps().isEmpty() || create){
+     
+            FirebaseOptions options = null;
+            try {
+                options = new FirebaseOptions.Builder()
+                        .setCredentials(GoogleCredentials.fromStream(path))
+                        .setDatabaseUrl("https://tapin-c0ba6.firebaseio.com")
+                        .build();
+            } catch (IOException ex) {
+                java.util.logging.Logger.getLogger(FirebaseAuthOpenF.class.getName()).log(Level.SEVERE, null, ex);
+                System.out.println("Failed to Init Firebase");
+            }
+            
+            FirebaseApp.initializeApp(options, appName);
+            
+        }
+
+    }
+    
+
     //made public for test purposes
     //method to check ID token. Note Firebase tokens expire in on hour
     //will return false if firebase token is not real token
@@ -68,15 +115,17 @@ public class FirebaseAuthOpenF implements AuthProvider {
             initFirebase();
         } catch (InternalUnauthenticatedException ex) {
             java.util.logging.Logger.getLogger(FirebaseAuthOpenF.class.getName()).log(Level.SEVERE, null, ex);
+            System.out.println("Failed to Init Firebase");
         }
         
         
         try {
-            decodedToken = FirebaseAuth.getInstance().verifyIdToken(idToken);
+            decodedToken = FirebaseAuth.getInstance(FirebaseApp.getInstance(appName)).verifyIdToken(idToken);
             isAuthorized = true;
         } catch (FirebaseAuthException ex) {
             java.util.logging.Logger.getLogger(FirebaseAuthOpenF.class.getName()).log(Level.SEVERE, null, ex);
             isAuthorized = false;
+            System.out.println("Failed to decode Token Firebase");
         }
         
         if(decodedToken != null){
@@ -101,34 +150,7 @@ public class FirebaseAuthOpenF implements AuthProvider {
         return isAuthorized;
     }
     
-    //method to make sure that there is always exactly one instance of the Firebase app
-    private void initFirebase() throws InternalUnauthenticatedException{
-        
-        if(FirebaseApp.getApps().isEmpty()){
-                    try {
-                        FileInputStream refreshToken = null;
-                            try {
-                                refreshToken = new FileInputStream("C:\\Users\\cmmcm\\Desktop\\Firebase\\tapin-c0ba6-firebase-adminsdk-wcwb2-f27fea915a.json");
-                            }catch (FileNotFoundException ex) {
-                                java.util.logging.Logger.getLogger(FirebaseAuth.class.getName()).log(Level.SEVERE, null, ex);
-                                System.out.println("Failed opening the file");
-                                throw new InternalUnauthenticatedException(ex);
-                            }
-            
-            FirebaseOptions options = new FirebaseOptions.Builder()
-                    .setCredentials(GoogleCredentials.fromStream(refreshToken))
-                    .setDatabaseUrl("https://tapin-c0ba6.firebaseio.com")
-                    .build();
-            
-            FirebaseApp.initializeApp(options);
-            
-        } catch (IOException ex) {
-            java.util.logging.Logger.getLogger(FirebaseAuth.class.getName()).log(Level.SEVERE, null, ex);
-            System.out.println("Failed I/O excpetion");
-        }
-        }
 
-    }
     
     //method called to add an Authorized Firebase user that was not in the database
     //user could have not been entered due to network error on their account creation
@@ -139,7 +161,7 @@ public class FirebaseAuthOpenF implements AuthProvider {
         try {
                 String username = decodedToken.getUid();
                 con = DbConnectionManager.getConnection();
-                pstmt = con.prepareStatement(TEST_USER);
+                pstmt = con.prepareStatement(QUERY_USER);
                 pstmt.setString(1, username);
                 rs = pstmt.executeQuery();
                 
@@ -159,7 +181,7 @@ public class FirebaseAuthOpenF implements AuthProvider {
             }
     }
     //sql statement to check if user exists in the database
-    private static final String TEST_USER = "SELECT username FROM ofUser where username=?";
+
     
     //method to verify users. If it does not throw an exception, the user is authorized
     @Override
@@ -215,6 +237,7 @@ public class FirebaseAuthOpenF implements AuthProvider {
 //throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
     }
 
+    //needed to ensure a Firebase user's password is null. 
     @Override
     public void setPassword(String username, String password) throws UserNotFoundException, UnsupportedOperationException {
         //throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
