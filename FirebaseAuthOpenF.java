@@ -52,7 +52,11 @@ import org.jivesoftware.openfire.user.UserNotFoundException;
 
 
 /**
- *
+ * Class that handles the verification of users given their valid Firebase ID tokens.
+ * Must be registered as the first class to handle authorization for Openfire.
+ * Is user submits a valid username that matches the firebase UID of the decoded
+ * ID token and their email is verified then the user in authenticated. Otherwise
+ * will throw an UnauthorizedException.
  * @author cmmcm
  */
 public class FirebaseAuthOpenF implements AuthProvider {
@@ -61,6 +65,10 @@ public class FirebaseAuthOpenF implements AuthProvider {
     String os = System.getProperty("os.name");
     private String appName = "openfireAuth";
     
+    /**
+     * Public constructor that ensures a single Firebase app 
+     * is initialized to verify tokens.
+     */
     public FirebaseAuthOpenF(){
         try {
             initFirebase();
@@ -69,7 +77,11 @@ public class FirebaseAuthOpenF implements AuthProvider {
         }
     }
     
-    //method to make sure that there is always exactly one instance of the Firebase app
+    /**
+     * Method to make sure that there is always exactly one instance of the Firebase app.
+     * If one is not present, it will create one.
+     * @throws InternalUnauthenticatedException : if the admin JSON resource fails
+     */
     private void initFirebase() throws InternalUnauthenticatedException{
         
         InputStream path = getClass().getResourceAsStream("/tapin-c0ba6-firebase-adminsdk-wcwb2-f27fea915a.json");
@@ -103,9 +115,15 @@ public class FirebaseAuthOpenF implements AuthProvider {
     }
     
 
-    //made public for test purposes
-    //method to check ID token. Note Firebase tokens expire in on hour
-    //will return false if firebase token is not real token
+    /**
+     * Method to verify an ID token. Will return true if the firebase 
+     * token is valid, otherwise false. If the token is valid, but the user
+     * has not verified their email, it will return false but will make sure the user
+     * is registered in Openfire.
+     * @param idToken : The ID token to check
+     * @return Boolean : true if the token is valid and the email is confirmed, otherwise false
+     * @throws ConnectionException : if there was a problem inserting a non existing user
+     */
     private Boolean checkToken(String idToken) throws ConnectionException{
         
         boolean isAuthorized = false;
@@ -150,10 +168,12 @@ public class FirebaseAuthOpenF implements AuthProvider {
         return isAuthorized;
     }
     
-
-    
-    //method called to add an Authorized Firebase user that was not in the database
-    //user could have not been entered due to network error on their account creation
+    /**
+     * Function to add a valid Firebase user that is not in the system, likely due to a 
+     * network error during registration process.
+     * @param decodedToken : the valid Firebase Token
+     * @throws ConnectionException : if the Database connection cannot be established
+     */
     private void addFirebaseUser(FirebaseToken decodedToken) throws ConnectionException{
         Connection con = null;
         PreparedStatement pstmt = null;
@@ -176,22 +196,30 @@ public class FirebaseAuthOpenF implements AuthProvider {
         catch (SQLException sqle) {
             Log.error("User SQL failure:", sqle);
             throw new ConnectionException(sqle);
-        }   catch (UserAlreadyExistsException ex) {
+        }   
+        catch (UserAlreadyExistsException ex) {
                 java.util.logging.Logger.getLogger(FirebaseAuthOpenF.class.getName()).log(Level.SEVERE, null, ex);
             }
+        finally{
+            DbConnectionManager.closeConnection(rs, pstmt, con);
+        }
     }
     //sql statement to check if user exists in the database
 
-    
-    //method to verify users. If it does not throw an exception, the user is authorized
+    /**
+     * Method to verify a user given their username and ID token.
+     * If it does not throw an exception, then the user is authenticated.
+     * @param username : openfire username
+     * @param idToken : stringified Firebase ID token
+     * @throws UnauthorizedException
+     * @throws ConnectionException
+     * @throws InternalUnauthenticatedException 
+     */
     @Override
     public void authenticate(String username , String idToken) throws UnauthorizedException, ConnectionException, InternalUnauthenticatedException {
         
          
         boolean isFirebaseUser = false;
-        Connection con = null;
-        PreparedStatement pstmt = null;
-        ResultSet rs = null;
         initFirebase();
         
         if (username == null || idToken == null) {
@@ -221,63 +249,77 @@ public class FirebaseAuthOpenF implements AuthProvider {
         if(!isFirebaseUser){
             throw new UnauthorizedException("User not authorized");
         }
-        
-        //check if the username is in the database, and if the user is not but they
-        //are a valid Firebase user then create the user.
 
         //got this far without an exception, user must be valid
 
     }
 
     
-    //all methods below are unused
+    /**
+     * Unused method, I do not store the user's passwords since I am using Firebase Authentication.
+     * @param username
+     * @return
+     * @throws UserNotFoundException
+     * @throws UnsupportedOperationException 
+     */
+    
+    /**
+     * Unused method, I do not store the user's passwords since I am using Firebase Authentication.
+     * @param username
+     * @return
+     * @throws UserNotFoundException
+     * @throws UnsupportedOperationException 
+     */
     @Override
     public String getPassword(String username) throws UserNotFoundException, UnsupportedOperationException {
         return username;
-//throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
     }
 
-    //needed to ensure a Firebase user's password is null. 
+    /**
+     * Ensure that the password field in the database is set to a NULL value. To do this,
+     * handle nothing in the method body.
+     * @param username
+     * @param password
+     * @throws UserNotFoundException
+     * @throws UnsupportedOperationException 
+     */
     @Override
     public void setPassword(String username, String password) throws UserNotFoundException, UnsupportedOperationException {
-        //throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
     }
+    
+    /**
+     * ALL METHODS BELOW ARE UNUSED BUT NEED TO BE OVERRIDDEN
+     * 
+     */
 
     @Override
     public boolean supportsPasswordRetrieval() {
         return false;
-//throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
     }
 
     @Override
     public boolean isScramSupported() {
         return false;
-        //throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
     }
 
     @Override
     public String getSalt(String username) throws UnsupportedOperationException, UserNotFoundException {
         return username;
-        //throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
     }
 
     @Override
     public int getIterations(String username) throws UnsupportedOperationException, UserNotFoundException {
-        int i = 0;
-        return i;
-        //throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+        return 0;
     }
 
     @Override
     public String getServerKey(String username) throws UnsupportedOperationException, UserNotFoundException {
         return username;
-        //throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
     }
 
     @Override
     public String getStoredKey(String username) throws UnsupportedOperationException, UserNotFoundException {
         return username;
-        //throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
     }
     
   
