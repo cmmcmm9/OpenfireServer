@@ -54,7 +54,7 @@ import org.jivesoftware.openfire.user.UserNotFoundException;
 /**
  * Class that handles the verification of users given their valid Firebase ID tokens.
  * Must be registered as the first class to handle authorization for Openfire.
- * Is user submits a valid username that matches the firebase UID of the decoded
+ * If a user submits a valid username that matches the firebase UID of the decoded
  * ID token and their email is verified then the user in authenticated. Otherwise
  * will throw an UnauthorizedException.
  * @author cmmcm
